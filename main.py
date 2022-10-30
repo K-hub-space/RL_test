@@ -8,10 +8,11 @@ episodes_num = 200
 batch_size = 256
 REPLAY_BUFFER_SIZE = 5000
 
-#replay bufferオブジェクトを作成
-replay_buffer = ReplayBuffer()
 
 def main():
+    #テストか否か
+    test = True
+
     envName = 'HalfCheetah-v2'
 
     if torch.cuda.is_available():
@@ -21,11 +22,18 @@ def main():
 
     env = gym.make(envName, render_mode="human") 
 
+    
+    #replay bufferオブジェクトを作成
+    replay_buffer = ReplayBuffer()
+
     action_space = env.action_space.shape[0]
     state_space = env.observation_space.shape[0] 
-    steps_limit = 2000
+    steps_limit = 800
 
     model = DDPG(state_space, action_space, replay_buffer)
+
+    if test == True:
+        model.load('models/DDPG')
 
     #train
     for i in range(episodes_num):
@@ -34,7 +42,8 @@ def main():
         observation = env.reset()
 
         for j in range(steps_limit):
-            env.render()
+            if test == True:
+                env.render()
 
             state = observation
          
@@ -48,16 +57,20 @@ def main():
                 state = state[0]
 
             if len(observation)==2:
-                observation = observation[0]    
+                observation = observation[0]   
 
-            # For replay buffer. (s_t, a_t, s_t+1, r)
-            model.add_experience(action, state, observation, reward, done)
+            if test == False:     
+                # For replay buffer. (s_t, a_t, s_t+1, r)
+                model.add_experience(action, state, observation, reward, done)
 
-            # Train actor/critic network
-            if len(model.replay_buffer.buffer) > batch_size:    
-                model.train()
+                # Train actor/critic network
+                if len(model.replay_buffer.buffer) > batch_size:    
+                    model.train()
 
             reward_per_episode += reward
+
+            if ((i+1)%20 == 0):
+                model.save()
 
             if (done or j == steps_limit -1):
                 print("Steps count: %d" % j)
