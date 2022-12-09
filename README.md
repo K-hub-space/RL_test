@@ -7,10 +7,10 @@ This is a test repository for reinforcement learning implementation.
 
 ## Usage
 - DDPG  
-　Execute main.py.
+Execute main.py.
  
 - TD3  
-  Execute td3_main.py(※Doesn't work well yet.)
+ Execute td3_main.py(※Doesn't work well yet.)
 
 ## Reference
 - https://github.com/JL321/PolicyGradients-torch
