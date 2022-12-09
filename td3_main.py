@@ -13,8 +13,8 @@ POLICY_UPDATE_PERIOD = 8
 
 
 def main():
-    #test or not
-    test = False
+    #test or not (Set False for training)
+    test = True
 
     envName = 'HalfCheetah-v2'
 

@@ -10,7 +10,7 @@ REPLAY_BUFFER_SIZE = 5000
 
 
 def main():
-    #test or not
+    #test or not(set False for training)
     test = True
 
     envName = 'HalfCheetah-v2'
