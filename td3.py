@@ -32,33 +32,57 @@ class Actor(nn.Module):
         return F.tanh(self.fc4(x))
 
 
-#critic net
+#critic net(2 critic networks)
 class Critic(nn.Module):
     def __init__(self, state_space, action_space):  
         super(Critic, self).__init__()
-        self.fc1 = nn.Linear(state_space, 128)
-        self.fcA1 = nn.Linear(action_space, 256)
-        self.fcS1 = nn.Linear(128, 256)
-        self.fc2 = nn.Linear(256, 300)
-        self.fc3 = nn.Linear(300, 400)
-        self.fc4 = nn.Linear(400, 1)
+
+        #first net
+        self.fca1 = nn.Linear(state_space, 128)
+        self.fcaA1 = nn.Linear(action_space, 256)
+        self.fcaS1 = nn.Linear(128, 256)
+        self.fca2 = nn.Linear(256, 300)
+        self.fca3 = nn.Linear(300, 400)
+        self.fca4 = nn.Linear(400, 1)
         
-        self.b1 = nn.BatchNorm1d(128)
-        self.b2 = nn.BatchNorm1d(256)
+        self.b_a1 = nn.BatchNorm1d(128)
+        self.b_a2 = nn.BatchNorm1d(256)
+
+        #second net
+        self.fcb1 = nn.Linear(state_space, 128)
+        self.fcbA1 = nn.Linear(action_space, 256)
+        self.fcbS1 = nn.Linear(128, 256)
+        self.fcb2 = nn.Linear(256, 300)
+        self.fcb3 = nn.Linear(300, 400)
+        self.fcb4 = nn.Linear(400, 1)
+        
+        self.b_b1 = nn.BatchNorm1d(128)
+        self.b_b2 = nn.BatchNorm1d(256)
 
     def forward(self, state, action):
-        x = self.b1(F.relu(self.fc1(state)))
-        aOut = self.fcA1(F.relu(action))
-        sOut = self.b2(F.relu(self.fcS1(x)))
-        comb = F.relu(aOut+sOut)
-        out = F.relu(self.fc2(comb))
-        out = F.relu(self.fc3(out))
-        out = self.fc4(out)
-        return out
+        #first net
+        x_a = self.b_a1(F.relu(self.fca1(state)))
+        aaOut = self.fcaA1(F.relu(action))
+        asOut = self.b_a2(F.relu(self.fcaS1(x_a)))
+        comb_a = F.relu(aaOut+asOut)
+        outa = F.relu(self.fca2(comb_a))
+        outa = F.relu(self.fca3(outa))
+        q1 = self.fca4(outa)
+
+        #second net
+        x_b = self.b_b1(F.relu(self.fcb1(state)))
+        baOut = self.fcbA1(F.relu(action))
+        bsOut = self.b_b2(F.relu(self.fcbS1(x_b)))
+        comb_b = F.relu(baOut+bsOut)
+        outb = F.relu(self.fcb2(comb_b))
+        outb = F.relu(self.fcb3(outb))
+        q2 = self.fcb4(outb)
+
+        return q1, q2
 
 
-#DDPG body
-class DDPG():
+#TD3 main
+class TD3():
     def __init__(self, state_space, action_space, replay_buffer):
 
         #make noise
@@ -71,17 +95,17 @@ class DDPG():
         #initialize target
         self.targActor = Actor(state_space, action_space).to(device)
         self.targCritic = Critic(state_space, action_space).to(device)
-
+        
         self.actorOpt = torch.optim.Adam(self.actor.parameters(), lr=1e-4, weight_decay=0.005)
-        self.criticOpt = torch.optim.Adam(self.critic.parameters(), lr=1e-3, weight_decay=0.005)
+        self.criticOpt = torch.optim.Adam(self.critic.parameters(), lr=1e-3, weight_decay=0.005) 
 
         self.loss = nn.MSELoss()
         self.gamma = 0.99
-        self.rho = 0.001
+        self.tau = 0.001
 
         self.replay_buffer = replay_buffer
 
-    #offpolicy action
+    #action
     def feed_forward_actor(self, state, exploreNoise=True, test=True):
         if test: 
             self.actor.eval()
@@ -103,7 +127,7 @@ class DDPG():
     def add_experience(self, action, state, new_state,reward, done):
         self.replay_buffer.add((action, state, new_state, reward, done))
 
-    def train(self):
+    def train(self, policy_update):
         self.actor.train()
         self.criticOpt.zero_grad()
         
@@ -118,35 +142,52 @@ class DDPG():
         new_state = torch.from_numpy(new_state).float().to(device)
         done = torch.from_numpy(done).float().to(device)
 
-        #loss function for critic
-        target = torch.unsqueeze(reward, 1)+torch.unsqueeze((1-done), 1)*self.gamma*(self.targCritic(new_state, self.targActor(new_state)))
+        q1, q2 = self.targCritic(new_state, self.targActor(new_state))
 
-        #update critic
-        critic_loss = self.loss(target.detach(), self.critic(state, action))
-        critic_loss.backward()
-        self.criticOpt.step()
+
+        next_qvalues = [min(q1, q2) for q1, q2 in zip(q1.detach().numpy().flatten(), q2.detach().numpy().flatten())]
+
+
+        #修正かも 
+        if next_qvalues == q1:
+            #loss function for target critic
+            target = torch.unsqueeze(reward, 1)+torch.unsqueeze((1-done), 1)*self.gamma*(q1)
+
+        else:
+            #loss function for target critic
+            target = torch.unsqueeze(reward, 1)+torch.unsqueeze((1-done), 1)*self.gamma*(q2)
+    
+
+        #update critic(loss1, loss2)
+        q1, q2 = self.critic(state, action)
+        critic_loss_one = self.loss(target.detach(), q1)
+        critic_loss_two = self.loss(target.detach(), q2)
+
+        critic_loss_total = critic_loss_one + critic_loss_two
+
+        critic_loss_total.backward()
+        self.criticOpt.step()   
         
-        #update actor
-        self.actorOpt.zero_grad()
-        policyLoss = -self.critic(state, self.actor(state)).mean()
-        policyLoss.backward()
-        self.actorOpt.step()
+        #delayed acor update 
+        if policy_update:
+            self.actorOpt.zero_grad()
+            policyLoss = -self.critic(state, self.actor(state))[0].mean()
+            policyLoss.backward()
+            self.actorOpt.step()
 
-        #update target
-        self._update_target()
 
     #target update function 
     def _update_target(self):
         for param1, param2 in zip(self.targActor.parameters(), self.actor.parameters()):
-            param1.data *= (1-self.rho)
-            param1.data += self.rho*param2.data
+            param1.data *= (1-self.tau)
+            param1.data += self.tau*param2.data
 
         for param1, param2 in zip(self.targCritic.parameters(), self.critic.parameters()):
-            param1.data *= (1-self.rho)
-            param1.data += self.rho*param2.data   
+            param1.data *= (1-self.tau)
+            param1.data += self.tau*param2.data   
 
     #save function
-    def save(self, path='models/DDPG'):
+    def save(self, path='models/TD3'):
         
         if 'models' in path and os.path.isdir('models') is False:
             os.mkdir('models')
@@ -157,7 +198,7 @@ class DDPG():
                     }, path)
         print("Saved Model Weights!")
 
-    def load(self, path='models/DDPG'):
+    def load(self, path='models/TD3'):
         
         model_dict = torch.load(path)
         self.actor.load_state_dict(model_dict['actor_weights'])
