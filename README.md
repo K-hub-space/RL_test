@@ -1,13 +1,15 @@
-This is a test repository for reinforcement learning.
+This is a test repository for reinforcement learning implementation.
 
-# Requirement
-
+# Execution environment
+- Ubuntu 22.04
 - mujoco210
-
-- OpenAI gym
+- openai gym
 
 # Usage
-
 - DDPG
+- TD3
 
-- SAC
+# Reference
+- https://github.com/JL321/PolicyGradients-torch
+- https://arxiv.org/pdf/1509.02971.pdf
+- https://arxiv.org/abs/1802.09477
