@@ -3,7 +3,8 @@ This is a test repository for reinforcement learning implementation.
 ## Execution environment
 - Ubuntu 22.04
 - mujoco210
-- openai gym
+- openai gym version 0.26.2
+- python 3.9
 
 ## Usage
 - DDPG  

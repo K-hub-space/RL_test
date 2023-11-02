@@ -8,7 +8,6 @@ episodes_num = 200
 batch_size = 256
 REPLAY_BUFFER_SIZE = 5000
 
-
 def main():
     #test or not(set False for training)
     test = True
