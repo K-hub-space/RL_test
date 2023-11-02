@@ -86,10 +86,10 @@ class DDPG():
         if test: 
             self.actor.eval()
 
-        if state.shape == (1, 2):
-               state = state[0]       
+        if len(state)==2:
+               state = state[0]   
         
-        state = torch.from_numpy(state[0]).float().to(device)
+        state = torch.from_numpy(state.astype(np.float32)).float().to(device)
 
         feed_forward = self.actor(state.reshape(1,17)).detach()
         

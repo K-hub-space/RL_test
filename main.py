@@ -48,7 +48,7 @@ def main():
             state = observation
          
             #Select action off-policy
-            action = model.feed_forward_actor(np.expand_dims(state, axis=0))
+            action = model.feed_forward_actor(state)
         
             # Throw action to environment
             observation, reward, done, _, info = env.step(action)
